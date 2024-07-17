@@ -135,7 +135,7 @@ class CPUBackend(BaseBackend):
         passes.convert.add_scf_to_cf(pm)
         passes.convert.add_index_to_llvmir(pm)
         cpu.passes.ttcpuir.add_triton_cpu_to_llvmir_pipeline(pm)
-        if self.cpu_arch == "x86_64" and "avx512f" in self.cpu_features:
+        if self.cpu_arch == "x86_64" and "avx512f" in self.cpu_features and os.environ.get("TRITON_CPU_NO_LIBMVEC", "0") != "1":
             cpu.passes.ttcpuir.add_math_to_libmvec(pm)
         passes.convert.add_math_to_llvmir(pm)
         cpu.passes.ttcpuir.add_math_to_libm(pm)

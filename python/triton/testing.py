@@ -6,7 +6,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Dict, List
 from . import language as tl
-
+import triton
 
 class Event:
 
@@ -103,6 +103,17 @@ def do_bench_cudagraph(fn, rep=20, grad_to_none=None, return_mode="mean"):
     times = torch.tensor(ret)
     return getattr(torch, return_mode)(times).item()
 
+def zero_cache(cache):
+
+    @triton.jit
+    def kernel_fill_zero(out, BLOCK_SIZE: tl.constexpr):
+        start = tl.program_id(0)
+        offs = start * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        zero = tl.full((BLOCK_SIZE, ), 0, dtype=tl.int32)
+        tl.store(out + offs, zero)
+
+    assert cache.shape[0] % 1024 == 0
+    kernel_fill_zero[(cache.shape[0] // 1024, )](cache, 1024)
 
 def do_bench(fn, warmup=25, rep=100, grad_to_none=None, quantiles=None, fast_flush=True, return_mode="mean",
              is_cpu=False):
@@ -177,7 +188,8 @@ def do_bench(fn, warmup=25, rep=100, grad_to_none=None, quantiles=None, fast_flu
             for x in grad_to_none:
                 x.grad = None
         # we clear the L2 cache before each run
-        cache.zero_()
+        # cache.zero_()
+        zero_cache(cache)
         # record time of `fn`
         start_event[i].record()
         fn()
