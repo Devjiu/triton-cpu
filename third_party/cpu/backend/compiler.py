@@ -136,7 +136,7 @@ class CPUBackend(BaseBackend):
         passes.convert.add_index_to_llvmir(pm)
         cpu.passes.ttcpuir.add_triton_cpu_to_llvmir_pipeline(pm)
         if self.cpu_arch == "x86_64" and "avx512f" in self.cpu_features and os.environ.get("TRITON_CPU_NO_LIBMVEC", "0") != "1":
-            cpu.passes.ttcpuir.add_math_to_libmvec(pm)
+            cpu.passes.ttcpuir.add_math_to_libmvec(pm, os.environ.get("TRITON_CPU_SLEEF_DIR") is not None)
         passes.convert.add_math_to_llvmir(pm)
         cpu.passes.ttcpuir.add_math_to_libm(pm)
         cpu.passes.ttcpuir.add_vector_to_llvmir(pm, options.enable_fast_math)
@@ -182,13 +182,18 @@ class CPUBackend(BaseBackend):
         with tempfile.TemporaryDirectory() as tmpdir:
             asm_path = os.path.join(tmpdir, "kernel.s")
             Path(asm_path).write_text(src)
+            lib_dirs = cpu_driver.library_dirs
+            libs = ["gcc", "m", "TritonCPURuntime"]
+            if os.environ.get("TRITON_CPU_SLEEF_DIR") is not None:
+                lib_dirs.append(os.environ.get("TRITON_CPU_SLEEF_DIR"))
+                libs.append("sleef")
             so = _build(
                 "kernel",
                 asm_path,
                 tmpdir,
-                cpu_driver.library_dirs,
+                lib_dirs,
                 cpu_driver.include_dirs,
-                ["gcc", "m", "TritonCPURuntime"],
+                libs
             )
             with open(so, "rb") as f:
                 return f.read()
