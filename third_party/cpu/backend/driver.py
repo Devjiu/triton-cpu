@@ -252,7 +252,7 @@ extern "C" void run_omp_kernels(uint32_t gridX, uint32_t gridY, uint32_t gridZ, 
   size_t N = gridX * gridY * gridZ;
 
   // For now, use the default chunk size, total iterations / max_threads.
-//#pragma omp parallel for collapse(3)
+//#pragma omp parallel for collapse(3) schedule(static)
   for (size_t k = 0; k < gridZ; ++k) {{
   for (size_t j = 0; j < gridY; ++j) {{
   for (size_t i = 0; i < gridX; ++i) {{
@@ -265,6 +265,51 @@ extern "C" void run_omp_kernels(uint32_t gridX, uint32_t gridY, uint32_t gridZ, 
 #endif
   }}
   }}
+  }}
+
+#if ENABLE_ITT
+    __itt_task_end(dom1);
+#endif
+}}
+
+extern "C" void run_omp_kernels2(uint32_t gridX, uint32_t gridY, uint32_t gridZ, kernel_ptr_t kernel_ptr {', ' + arg_decls if len(arg_decls) > 0 else ''}) {{
+#if ENABLE_ITT
+    __itt_task_begin(dom1, __itt_null, __itt_null, omp_launcher_call_str);
+#endif
+  // TODO: Consider using omp collapse(3) clause for simplicity?
+  size_t N = gridX * gridY * gridZ;
+
+  // For now, use the default chunk size, total iterations / max_threads.
+#pragma omp parallel
+  {{
+    int64_t num_threads = omp_get_num_threads();
+    int64_t tid = omp_get_thread_num();
+    int64_t iters_per_thread = (N + num_threads - 1) / num_threads;
+    int64_t start = iters_per_thread * tid;
+    int64_t end = std::min((int64_t)N, start + iters_per_thread);
+    int64_t X = start % gridX;
+    int64_t Y = start / gridX % gridY;
+    int64_t Z = start / gridX / gridY;
+    for (int64_t i = start; i < end; ++i) {{
+      /*
+      ++X;
+      if (X == gridX) {{
+        X = 0;
+        ++Y;
+        if (Y == gridY) {{
+          Y = 0;
+          ++Z;
+        }}
+      }}
+      */
+#if ENABLE_ITT
+      __itt_task_begin(dom1, __itt_null, __itt_null, kernel_call_str);
+#endif
+      (*kernel_ptr)({kernel_fn_args_list + ', ' if len(kernel_fn_args) > 0 else ''} i, Y, Z, gridX, gridY, gridZ);
+#if ENABLE_ITT
+      __itt_task_end(dom1);
+#endif
+    }}
   }}
 
 #if ENABLE_ITT
