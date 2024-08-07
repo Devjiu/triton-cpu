@@ -1,6 +1,5 @@
 import os
 import hashlib
-import importlib
 import importlib.resources
 import tempfile
 
@@ -14,10 +13,16 @@ from triton._C.libtriton import llvm
 
 _dirname = os.getenv("TRITON_SYS_PATH", default="/usr/local")
 # for locating libTritonCPURuntime
+# _triton_C_dir = importlib.resources.files(triton._C).joinpath("")
 _triton_C_dir = importlib.resources.files(triton).joinpath("_C")
 
-include_dirs = [os.path.join(_dirname, "include"), "/opt/intel/oneapi/vtune/latest/include"]
-library_dirs = [os.path.join(_dirname, "lib"), _triton_C_dir, "/opt/intel/oneapi/vtune/latest/lib64"]
+include_dirs = [os.path.join(_dirname, "include"), "/home/dmitriim/vtune_nda/Intel_VTune_Profiler_2024.2.0_nda/include/"]
+library_dirs = [os.path.join(_dirname, "lib"), "/home/dmitriim/vtune_nda/Intel_VTune_Profiler_2024.2.0_nda/lib64/", _triton_C_dir]
+# =======
+# dirname = os.getenv("TRITON_SYS_PATH", default="/usr/local")
+# include_dir = [os.path.join(dirname, "include")]
+# library_dir = [os.path.join(dirname, "lib")]
+# >>>>>>> acbaf9b0 (perf)
 libraries = ["stdc++", "ittnotify"]
 
 
@@ -56,12 +61,8 @@ class CPUUtils(object):
         pass
 
     def load_binary(self, name, kernel, shared_mem, device):
-        if name == "softmax_kernel" and False:
-            import ctypes
-            lib = ctypes.cdll.LoadLibrary("/localdisk/ilyaenko/triton-cpu/triton-cpu-tests/02-softmax/softmax_kernel.so")
-            fn_ptr = getattr(lib, name)
-            fn_ptr_as_void_p = ctypes.cast(fn_ptr, ctypes.c_void_p).value
-            return (lib, fn_ptr_as_void_p, 0, 0)
+        # so = "/home/dmitriim/.triton/cache/libcached.so"
+        # with open(so, "wb+") as f:
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".so") as f:
             f.write(kernel)
             f.flush()
@@ -149,7 +150,7 @@ def make_launcher(constants, signature, ids):
 #include <string>
 #include <memory>
 
-#define ENABLE_ITT 0
+#define ENABLE_ITT 1
 
 #if ENABLE_ITT
 #include <ittnotify.h>
@@ -249,22 +250,14 @@ extern "C" void run_omp_kernels(uint32_t gridX, uint32_t gridY, uint32_t gridZ, 
     __itt_task_begin(dom1, __itt_null, __itt_null, omp_launcher_call_str);
 #endif
   // TODO: Consider using omp collapse(3) clause for simplicity?
+  auto all_grids = get_all_grids(gridX, gridY, gridZ);
   size_t N = gridX * gridY * gridZ;
 
   // For now, use the default chunk size, total iterations / max_threads.
 //#pragma omp parallel for collapse(3) schedule(static)
-  for (size_t k = 0; k < gridZ; ++k) {{
-  for (size_t j = 0; j < gridY; ++j) {{
-  for (size_t i = 0; i < gridX; ++i) {{
-#if ENABLE_ITT
-    __itt_task_begin(dom1, __itt_null, __itt_null, kernel_call_str);
-#endif
-    (*kernel_ptr)({kernel_fn_args_list + ', ' if len(kernel_fn_args) > 0 else ''} i, j, k, gridX, gridY, gridZ);
-#if ENABLE_ITT
-    __itt_task_end(dom1);
-#endif
-  }}
-  }}
+  for (size_t i = 0; i < N; ++i) {{
+    const auto [x, y, z] = all_grids[i];
+    (*kernel_ptr)({kernel_fn_args_list + ', ' if len(kernel_fn_args) > 0 else ''} x, y, z, gridX, gridY, gridZ);
   }}
 
 #if ENABLE_ITT
@@ -272,50 +265,6 @@ extern "C" void run_omp_kernels(uint32_t gridX, uint32_t gridY, uint32_t gridZ, 
 #endif
 }}
 
-extern "C" void run_omp_kernels2(uint32_t gridX, uint32_t gridY, uint32_t gridZ, kernel_ptr_t kernel_ptr {', ' + arg_decls if len(arg_decls) > 0 else ''}) {{
-#if ENABLE_ITT
-    __itt_task_begin(dom1, __itt_null, __itt_null, omp_launcher_call_str);
-#endif
-  // TODO: Consider using omp collapse(3) clause for simplicity?
-  size_t N = gridX * gridY * gridZ;
-
-  // For now, use the default chunk size, total iterations / max_threads.
-#pragma omp parallel
-  {{
-    int64_t num_threads = omp_get_num_threads();
-    int64_t tid = omp_get_thread_num();
-    int64_t iters_per_thread = (N + num_threads - 1) / num_threads;
-    int64_t start = iters_per_thread * tid;
-    int64_t end = std::min((int64_t)N, start + iters_per_thread);
-    int64_t X = start % gridX;
-    int64_t Y = start / gridX % gridY;
-    int64_t Z = start / gridX / gridY;
-    for (int64_t i = start; i < end; ++i) {{
-      /*
-      ++X;
-      if (X == gridX) {{
-        X = 0;
-        ++Y;
-        if (Y == gridY) {{
-          Y = 0;
-          ++Z;
-        }}
-      }}
-      */
-#if ENABLE_ITT
-      __itt_task_begin(dom1, __itt_null, __itt_null, kernel_call_str);
-#endif
-      (*kernel_ptr)({kernel_fn_args_list + ', ' if len(kernel_fn_args) > 0 else ''} i, Y, Z, gridX, gridY, gridZ);
-#if ENABLE_ITT
-      __itt_task_end(dom1);
-#endif
-    }}
-  }}
-
-#if ENABLE_ITT
-    __itt_task_end(dom1);
-#endif
-}}
 
 static PyObject* launch(PyObject* self, PyObject* args) {{
 #if ENABLE_ITT

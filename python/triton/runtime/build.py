@@ -20,6 +20,7 @@ def quiet():
 
 
 def _build(name, src, srcdir, library_dirs, include_dirs, libraries):
+    # print("libraries: ", libraries)
     suffix = sysconfig.get_config_var('EXT_SUFFIX')
     system = platform.system()
     machine = platform.machine()
@@ -45,6 +46,7 @@ def _build(name, src, srcdir, library_dirs, include_dirs, libraries):
     py_include_dir = sysconfig.get_paths(scheme=scheme)["include"]
     include_dirs = include_dirs + [srcdir, py_include_dir]
     cc_cmd = [cc, src, "-O3", "-shared", "-fPIC", "-o", so]
+    cc_cmd += ["-g"]
     # Use dynamic lookup to load Python library on Mac
     if system == "Darwin":
         cc_cmd += ["-undefined", "dynamic_lookup"]
@@ -61,6 +63,7 @@ def _build(name, src, srcdir, library_dirs, include_dirs, libraries):
         if system == "Linux" and machine in ("aarch64", "arm64"):
             # On Arm backend, some CPU (neoverse-v2) needs to be specified through -mcpu
             cc_cmd += ["-mcpu=native"]
+    # print("cmd: ", cc_cmd)
     ret = subprocess.check_call(cc_cmd)
     if ret == 0:
         return so
