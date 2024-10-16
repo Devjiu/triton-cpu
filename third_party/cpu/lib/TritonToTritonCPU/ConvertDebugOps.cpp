@@ -37,7 +37,6 @@ public:
     addLegalOp<memref::AllocOp>();
     addLegalOp<memref::DeallocOp>();
     addLegalOp<memref::CastOp>();
-    addLegalOp<triton::cpu::StoreOp>();
 
     addIllegalOp<triton::PrintOp>();
     addIllegalOp<triton::AssertOp>();
@@ -73,14 +72,20 @@ struct PrintOpConversion : public OpConversionPattern<triton::PrintOp> {
       auto tensorTy = cast<RankedTensorType>(operand.getType());
       auto elemTy = tensorTy.getElementType();
       if (isa<triton::PointerType>(elemTy)) {
-        elemTy = IntegerType::get(elemTy.getContext(), 64);
+        elemTy = rewriter.getI64Type();
       }
       MemRefType memRefTy = MemRefType::get(tensorTy.getShape(), elemTy);
 
       Value allocVal = rewriter.create<memref::AllocOp>(
-          loc, memRefTy, rewriter.getIntegerAttr(rewriter.getI64Type(), 64));
+          loc, memRefTy, rewriter.getI64IntegerAttr(64));
 
-      rewriter.create<triton::cpu::StoreOp>(loc, operand, allocVal);
+      Value vec = rewriter.getRemappedValue(operand);
+      VectorType vecTy = cast<VectorType>(vec.getType());
+
+      Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+      SmallVector<Value> indices(vecTy.getRank(), zeroIdx);
+
+      rewriter.create<vector::TransferWriteOp>(loc, vec, allocVal, indices);
 
       Value allocUnrankedVal = rewriter.create<memref::CastOp>(
           loc, UnrankedMemRefType::get(elemTy, memRefTy.getMemorySpace()),

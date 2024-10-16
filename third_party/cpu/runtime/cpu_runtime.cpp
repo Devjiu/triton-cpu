@@ -226,8 +226,8 @@ template <typename T> struct MemRefDescriptor {
     sizes.resize(rank);
     strides.resize(rank);
     for (int32_t i = 0; i < rank; i++) {
-      sizes[i] = (intptr_t)rawDesc->sizesAndStrides[i];
-      strides[i] = (intptr_t)rawDesc->sizesAndStrides[i + rank];
+      sizes[i] = rawDesc->sizesAndStrides[i];
+      strides[i] = rawDesc->sizesAndStrides[i + rank];
     }
   }
 };
@@ -280,9 +280,9 @@ void printToStream(MemRefDescriptor<T> &&desc, std::stringstream &ss,
   ss << "]\n";
 }
 
-void typeSerializationTo(std::stringstream &ss, int32_t rank, void *descriptor,
-                         int32_t btw, bool isInteger, bool isSignedInteger,
-                         bool asHex) {
+void printMemRef(std::stringstream &ss, int32_t rank, void *descriptor,
+                 int32_t btw, bool isInteger, bool isSignedInteger,
+                 bool asHex) {
 
   FormatInfo partialFormat{.isInt = isInteger,
                            .isSigned = isSignedInteger,
@@ -409,16 +409,16 @@ EXPORT void triton_vector_print(int32_t pid0, int32_t pid1, int32_t pid2,
   std::cout << ss.str() << std::flush;
 }
 
-EXPORT void triton_vector_print_memref(int32_t pid0, int32_t pid1, int32_t pid2,
-                                       const char *prefix,
-                                       UnrankedMemRefType memref, int32_t btw,
-                                       bool isInteger, bool isSignedInteger,
-                                       bool asHex) {
+EXPORT void triton_print_unranked_memref(int32_t pid0, int32_t pid1,
+                                         int32_t pid2, const char *prefix,
+                                         UnrankedMemRefType memref, int32_t btw,
+                                         bool isInteger, bool isSignedInteger,
+                                         bool asHex) {
   std::stringstream ss;
   ss << "(" << pid0 << ", " << pid1 << ", " << pid2 << ")" << prefix;
 
-  typeSerializationTo(ss, memref.rank, memref.descriptor, btw, isInteger,
-                      isSignedInteger, asHex);
+  printMemRef(ss, memref.rank, memref.descriptor, btw, isInteger,
+              isSignedInteger, asHex);
   std::cout << ss.str() << std::flush;
 }
 
